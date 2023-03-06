@@ -1,5 +1,5 @@
-cortex/*
+cortex
 !cortex/1d122189-406b-437e-ab99-1f38e781dca6.json
-gpt3_logs/*
+gpt3_logs
 !gpt3_logs/1678107148.6796217_gpt3.txt
 key*
