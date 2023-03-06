@@ -7,6 +7,15 @@ from time import time,sleep
 from uuid import uuid4
 import datetime
 
+# Key files:
+openAIKeyFile = 'key_openai.txt'
+pineconeKeyFile = 'key_pinecone.txt'
+
+#Pinecone Params
+pineconeEnvironment = 'us-east1-gcp'
+pineconeIndex = 'codebot'
+
+# GPT Params
 gptModel = 'text-davinci-003'
 modelTemp = 0.3
 tokens = 400
@@ -84,9 +93,9 @@ def load_conversation(results):
 
 if __name__ == '__main__':
     convo_length = 30
-    openai.api_key = open_file('key_openai.txt')
-    pinecone.init(api_key=open_file('key_pinecone.txt'), environment='us-east1-gcp')
-    vdb = pinecone.Index("codebot")
+    openai.api_key = open_file(openAIKeyFile)
+    pinecone.init(api_key=open_file(pineconeKeyFile), environment=pineconeEnvironment)
+    vdb = pinecone.Index(pineconeIndex)
     while True:
         #### get user input, save it, vectorize it, save to pinecone
         payload = list()
