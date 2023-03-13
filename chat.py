@@ -1,6 +1,7 @@
 import sys
 import warnings
 import brain
+import utils
 from pynput.keyboard import Key, KeyCode, Listener
 import sounddevice as sd
 import numpy as np
@@ -103,7 +104,8 @@ def process_output(q):
     global listening, app_running, sr
     processor = WhisperProcessor.from_pretrained("openai/whisper-base.en")
     model = WhisperForConditionalGeneration.from_pretrained("openai/whisper-base.en")
-    print("\nHold " + ptt_key + " key to start listening\n\nUSER: ")
+    print("\nHold " + ptt_key + " key to talk to CodeBot")
+    print("Press ESC any time to quit\n\nUSER: ")
     while app_running:
         while listening:
             # Wait for an output array to be added to the queue
@@ -129,6 +131,9 @@ def process_output(q):
 # suppress warning from transformers
 if ignore_warnings:
     warnings.filterwarnings("ignore")
+
+#clear the screen
+utils.clear()
 
 # Start the processing thread
 processing_thread = threading.Thread(target=process_output, args=(q,))
