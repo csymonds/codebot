@@ -26,8 +26,7 @@ It also uses the Whisper API to do speech to text
    $ cd codebot
    ```
 ## Virtual environment and dependency installation
-4. Virtualize
-   Windows users will see `venv/Scripts/activate`
+4. Virtualize (Note: Windows users will see `venv/Scripts/activate`)
    ```
    $ python -m venv venv
    $ . venv/bin/activate
@@ -50,25 +49,38 @@ It also uses the Whisper API to do speech to text
    $ pip3 install pynput torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu117
    ```
 
-6. Make a copy of the example environment variables files
+6. Add keys
+
+   Step 1: Make a copy of the example environment variables files
 
    ```bash
    $ cp example_key_openai.txt key_openai.txt
    $ cp example_key_pinecone.txt key_pinecone.txt
    ```
 
-7. Add your [OpenAI API key](https://beta.openai.com/account/api-keys) to the newly created `key_openai.txt` file
-    Add your [Pinecone API key](https://docs.pinecone.io/docs/quickstart#2-get-and-verify-your-pinecone-api-key) to the newly created `key_pinecone.txt` file
+   Step 2: Copy in your key to the respective file
 
-8. Deactivate
+      Add your [OpenAI API key](https://beta.openai.com/account/api-keys) to the newly created `key_openai.txt` file
+    
+      Add your [Pinecone API key](https://docs.pinecone.io/docs/quickstart#2-get-and-verify-your-pinecone-api-key) to the newly created `key_pinecone.txt` file
+
+7. Deactivate
    ```
    $ deactivate
    ```
 
 
-Tips: sounddevice defaults to your default communications devices to record/playback To check/modify what those defaults are, use
+Tips: sounddevice defaults to your default communications devices in order to record/playback 
+
+To check/modify what those defaults are, use
 
    ```bash
    python -m sounddevice
    ```
 
+PLEASE NOTE: Windows Defender will have an issue with the chat.py file because of the pynput library. It considers the use of this library to constitute a keylogger and will quarantine the file even before you run it. Therefore if you would like to run this file, once Windows Defender quarantines the file, you will need to 
+
+1. tell Windows Defender to allow the python file and
+2. Look in your Protection History, find the threat action, and tell it to restore the file
+
+Finally: You will get a warning about model parameters missing when you run this. It is harmless, and can be suppressed by setting the `ignore_warnings` parameter to `True`
