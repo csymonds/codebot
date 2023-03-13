@@ -1,11 +1,10 @@
 import os
 import openai
 import pinecone
-import json
 import re
 from time import time,sleep
 from uuid import uuid4
-import datetime
+import utils
 
 # Key files:
 openAIKeyFile = 'key_openai.txt'
@@ -17,32 +16,11 @@ pineconeIndex = 'codebot'
 
 # GPT Params
 gptModel = 'text-davinci-003'
-modelTemp = 0.3
-tokens = 400
+modelTemp = 0.6
+tokens = 600
 stop = ['USER:', 'CODEBOT:']
 
-def open_file(filepath):
-    with open(filepath, 'r', encoding='utf-8') as infile:
-        return infile.read()
 
-
-def save_file(filepath, content):
-    with open(filepath, 'w', encoding='utf-8') as outfile:
-        outfile.write(content)
-
-
-def load_json(filepath):
-    with open(filepath, 'r', encoding='utf-8') as infile:
-        return json.load(infile)
-
-
-def save_json(filepath, payload):
-    with open(filepath, 'w', encoding='utf-8') as outfile:
-        json.dump(payload, outfile, ensure_ascii=False, sort_keys=True, indent=2)
-
-
-def timestamp_to_datetime(unix_time):
-    return datetime.datetime.fromtimestamp(unix_time).strftime("%A, %B %d, %Y at %I:%M%p %Z")
 
 
 def gpt3_embedding(content, engine='text-embedding-ada-002'):
@@ -71,7 +49,7 @@ def gpt3_completion(prompt):
             filename = '%s_gpt3.txt' % time()
             if not os.path.exists('gpt3_logs'):
                 os.makedirs('gpt3_logs')
-            save_file('gpt3_logs/%s' % filename, prompt + '\n\n==========\n\n' + text)
+            utils.save_file('gpt3_logs/%s' % filename, prompt + '\n\n==========\n\n' + text)
             return text
         except Exception as oops:
             retry += 1
@@ -84,7 +62,7 @@ def gpt3_completion(prompt):
 def load_conversation(results):
     result = list()
     for m in results['matches']:
-        info = load_json('cortex/%s.json' % m['id'])
+        info = utils.load_json('cortex/%s.json' % m['id'])
         result.append(info)
     ordered = sorted(result, key=lambda d: d['time'], reverse=False)  # sort them all chronologically
     messages = [i['message'] for i in ordered]
@@ -93,36 +71,36 @@ def load_conversation(results):
 
 if __name__ == '__main__':
     convo_length = 30
-    openai.api_key = open_file(openAIKeyFile)
-    pinecone.init(api_key=open_file(pineconeKeyFile), environment=pineconeEnvironment)
+    openai.api_key = utils.open_file(openAIKeyFile)
+    pinecone.init(api_key=utils.open_file(pineconeKeyFile), environment=pineconeEnvironment)
     vdb = pinecone.Index(pineconeIndex)
     while True:
         #### get user input, save it, vectorize it, save to pinecone
         payload = list()
         a = input('\n\nUSER: ')
         timestamp = time()
-        timestring = timestamp_to_datetime(timestamp)
+        timestring = utils.timestamp_to_datetime(timestamp)
         #message = '%s: %s - %s' % ('USER', timestring, a)
         message = a
         vector = gpt3_embedding(message)
         unique_id = str(uuid4())
         metadata = {'speaker': 'USER', 'time': timestamp, 'message': message, 'timestring': timestring, 'uuid': unique_id}
-        save_json('cortex/%s.json' % unique_id, metadata)
+        utils.save_json('cortex/%s.json' % unique_id, metadata)
         payload.append((unique_id, vector))
         #### search for relevant messages, and generate a response
         results = vdb.query(vector=vector, top_k=convo_length)
         conversation = load_conversation(results)  # results should be a DICT with 'matches' which is a LIST of DICTS, with 'id'
-        prompt = open_file('prompt_response.txt').replace('<<CONVERSATION>>', conversation).replace('<<MESSAGE>>', a)
+        prompt = utils.open_file('prompt_response.txt').replace('<<CONVERSATION>>', conversation).replace('<<MESSAGE>>', a)
         #### generate response, vectorize, save, etc
         output = gpt3_completion(prompt)
         timestamp = time()
-        timestring = timestamp_to_datetime(timestamp)
+        timestring = utils.timestamp_to_datetime(timestamp)
         #message = '%s: %s - %s' % ('CODEBOT', timestring, output)
         message = output
         vector = gpt3_embedding(message)
         unique_id = str(uuid4())
         metadata = {'speaker': 'CODEBOT', 'time': timestamp, 'message': message, 'timestring': timestring, 'uuid': unique_id}
-        save_json('cortex/%s.json' % unique_id, metadata)
+        utils.save_json('cortex/%s.json' % unique_id, metadata)
         payload.append((unique_id, vector))
         vdb.upsert(payload)
         print('\n\nCODEBOT: %s' % output) 

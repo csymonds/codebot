@@ -3,3 +3,6 @@ cortex
 gpt3_logs
 !gpt3_logs/1678107148.6796217_gpt3.txt
 key*
+__pycache__/
+venv
+env/
