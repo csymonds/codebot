@@ -1,106 +1,147 @@
-import os
-import openai
-import pinecone
-import re
-from time import time,sleep
-from uuid import uuid4
-import utils
+import sys
+import warnings
+import brain
+from pynput.keyboard import Key, KeyCode, Listener
+import sounddevice as sd
+import numpy as np
+from queue import Queue
+import threading
+from transformers import WhisperProcessor, WhisperForConditionalGeneration
 
-# Key files:
-openAIKeyFile = 'key_openai.txt'
-pineconeKeyFile = 'key_pinecone.txt'
+# control state of app
+app_running = True
+ignore_warnings = False
 
-#Pinecone Params
-pineconeEnvironment = 'us-east1-gcp'
-pineconeIndex = 'codebot'
+# listening state
+listening=False
 
-# GPT Params
-gptModel = 'text-davinci-003'
-modelTemp = 0.6
-tokens = 600
-stop = ['USER:', 'CODEBOT:']
+# push to talk key
+ptt_key = 'z'
 
+# Set the sampling rate (number of samples per second)
+sr = 16000
 
+# set a signal floor to identify "silence"
+signal_floor = 0.003
 
+# Create an output array to store the recorded audio
+out = np.zeros((0, 1))
 
-def gpt3_embedding(content, engine='text-embedding-ada-002'):
-    content = content.encode(encoding='ASCII',errors='ignore').decode()  # fix any UNICODE errors
-    response = openai.Embedding.create(input=content,engine=engine)
-    vector = response['data'][0]['embedding']  # this is a normal list
-    return vector
+# Create a processing queue
+q = Queue()
 
+# let's track how many blocks of silence we hear
+silence_count = 0
 
-
-def gpt3_completion(prompt):
-    max_retry = 5
-    retry = 0
-    prompt = prompt.encode(encoding='ASCII',errors='ignore').decode()
-    while True:
-        try:
-            response = openai.Completion.create(
-                model=gptModel,
-                prompt=prompt,
-                max_tokens=tokens,
-                temperature=modelTemp,
-                stop=stop)
-            text = response['choices'][0]['text'].strip()
-            text = re.sub('[\r\n]+', '\n', text)
-            text = re.sub('[\t ]+', ' ', text)
-            filename = '%s_gpt3.txt' % time()
-            if not os.path.exists('gpt3_logs'):
-                os.makedirs('gpt3_logs')
-            utils.save_file('gpt3_logs/%s' % filename, prompt + '\n\n==========\n\n' + text)
-            return text
-        except Exception as oops:
-            retry += 1
-            if retry >= max_retry:
-                return "GPT3 error: %s" % oops
-            print('Error communicating with OpenAI:', oops)
-            sleep(1)
+def startListening():
+    global q, out, listening
+     
+    with sd.Stream(channels=1, callback=audio_callback, blocksize=2048, samplerate=sr):
+        #print("starting input stream with devices: " + str(sd.default.device))
+        while listening:
+            pass
+        
+    # send the last chunk to the processing queue
+    q.put(out)
+    # Signal the processing thread to stop
+    q.put(None)
+    # Create a new output array
+    #print("resetting out array")
+    out = np.zeros((0, 1))
+    
 
 
-def load_conversation(results):
-    result = list()
-    for m in results['matches']:
-        info = utils.load_json('cortex/%s.json' % m['id'])
-        result.append(info)
-    ordered = sorted(result, key=lambda d: d['time'], reverse=False)  # sort them all chronologically
-    messages = [i['message'] for i in ordered]
-    return '\n'.join(messages).strip()
+def on_press(key):
+    global listening, startListening, ptt_key
+    sys.stdout.flush()
+    try:
+        if listening==False and str(key.char) == ptt_key:
+            #print('alphanumeric key {0} pressed'.format(
+            #key.char))
+            listening=True
+            # Start the processing thread
+            listening_thread = threading.Thread(target=startListening)
+            listening_thread.start()
+    except AttributeError:
+        sys.stdout.flush()
+        #print('special key {0} pressed'.format(
+            #key))
 
 
-if __name__ == '__main__':
-    convo_length = 30
-    openai.api_key = utils.open_file(openAIKeyFile)
-    pinecone.init(api_key=utils.open_file(pineconeKeyFile), environment=pineconeEnvironment)
-    vdb = pinecone.Index(pineconeIndex)
-    while True:
-        #### get user input, save it, vectorize it, save to pinecone
-        payload = list()
-        a = input('\n\nUSER: ')
-        timestamp = time()
-        timestring = utils.timestamp_to_datetime(timestamp)
-        #message = '%s: %s - %s' % ('USER', timestring, a)
-        message = a
-        vector = gpt3_embedding(message)
-        unique_id = str(uuid4())
-        metadata = {'speaker': 'USER', 'time': timestamp, 'message': message, 'timestring': timestring, 'uuid': unique_id}
-        utils.save_json('cortex/%s.json' % unique_id, metadata)
-        payload.append((unique_id, vector))
-        #### search for relevant messages, and generate a response
-        results = vdb.query(vector=vector, top_k=convo_length)
-        conversation = load_conversation(results)  # results should be a DICT with 'matches' which is a LIST of DICTS, with 'id'
-        prompt = utils.open_file('prompt_response.txt').replace('<<CONVERSATION>>', conversation).replace('<<MESSAGE>>', a)
-        #### generate response, vectorize, save, etc
-        output = gpt3_completion(prompt)
-        timestamp = time()
-        timestring = utils.timestamp_to_datetime(timestamp)
-        #message = '%s: %s - %s' % ('CODEBOT', timestring, output)
-        message = output
-        vector = gpt3_embedding(message)
-        unique_id = str(uuid4())
-        metadata = {'speaker': 'CODEBOT', 'time': timestamp, 'message': message, 'timestring': timestring, 'uuid': unique_id}
-        utils.save_json('cortex/%s.json' % unique_id, metadata)
-        payload.append((unique_id, vector))
-        vdb.upsert(payload)
-        print('\n\nCODEBOT: %s' % output) 
+def on_release(key):
+    global listening, app_running, ptt_key
+    sys.stdout.flush()
+    #print('{0} release'.format(key))
+    if key == Key.esc:     # Stop listener
+        print("Terminating")
+        app_running = False
+        return False
+    
+    if key == KeyCode.from_char(ptt_key):
+        #print("Listening stopped")
+        listening=False
+
+
+# Define a callback function to handle incoming audio
+def audio_callback(indata, outdata, frames, time, status):
+    global out, q, silence_count, signal_floor, listening
+
+    data = indata.T.reshape(-1,)
+
+    if status:
+        print(status, file=sys.stderr)
+    
+    if len(out) == 0:
+        out = data
+    else:
+        out = np.concatenate((out, data))
+    
+
+    
+# Define a processing function to process the output arrays from the queue
+def process_output(q):
+    global listening, app_running, sr
+    processor = WhisperProcessor.from_pretrained("openai/whisper-base.en")
+    model = WhisperForConditionalGeneration.from_pretrained("openai/whisper-base.en")
+    print("\nHold " + ptt_key + " key to start listening\n\nUSER: ")
+    while app_running:
+        while listening:
+            # Wait for an output array to be added to the queue
+            sample = q.get()
+            if sample is None:
+                print("no sample received, stopping")
+                # If the output array is None, back to top
+                break
+            if len(sample) == 0:
+                continue
+            # Get the input features from the output array using the WhisperProcessor
+            #print(sample)
+            #sd.play(sample, sr)
+            input_features = processor(sample, sampling_rate=sr, return_tensors="pt").input_features
+            predicted_ids = model.generate(input_features)
+            transcription = processor.batch_decode(predicted_ids, skip_special_tokens=True)
+            # somehow gibberish or random noise cause it to output "you" or "You"
+            if str(transcription[0].strip().lower())  != "you":
+                print(str(transcription[0]))
+                brain.chat(str(transcription[0]))
+                print("\nUSER: ")
+
+# suppress warning from transformers
+if ignore_warnings:
+    warnings.filterwarnings("ignore")
+
+# Start the processing thread
+processing_thread = threading.Thread(target=process_output, args=(q,))
+processing_thread.start()
+#print("processing thread started")
+
+brain.init()
+print("Welcome to CodeBot!")
+
+with Listener(
+        on_press=on_press,
+        on_release=on_release) as listener:
+    listener.join()
+
+# Wait for the processing thread to stop
+processing_thread.join()
