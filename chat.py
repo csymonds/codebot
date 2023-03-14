@@ -2,7 +2,7 @@ import sys
 import warnings
 import brain
 import utils
-from pynput.keyboard import Key, KeyCode, Listener
+import keyboard
 import sounddevice as sd
 import numpy as np
 from queue import Queue
@@ -52,35 +52,18 @@ def startListening():
     
 
 
-def on_press(key):
-    global listening, startListening, ptt_key
+def on_key_event(key):
+    global listening, startListening, ptt_key, app_running
     sys.stdout.flush()
-    try:
-        if listening==False and str(key.char) == ptt_key:
-            #print('alphanumeric key {0} pressed'.format(
-            #key.char))
-            listening=True
-            # Start the processing thread
-            listening_thread = threading.Thread(target=startListening)
-            listening_thread.start()
-    except AttributeError:
-        sys.stdout.flush()
-        #print('special key {0} pressed'.format(
-            #key))
+    if (listening==False and key.name == ptt_key and key.event_type == keyboard.KEY_DOWN):
+        listening=True
+        listening_thread = threading.Thread(target=startListening)
+        listening_thread.start()
 
-
-def on_release(key):
-    global listening, app_running, ptt_key
-    sys.stdout.flush()
-    #print('{0} release'.format(key))
-    if key == Key.esc:     # Stop listener
-        print("Terminating")
-        app_running = False
-        return False
-    
-    if key == KeyCode.from_char(ptt_key):
-        #print("Listening stopped")
+    if (key.name == ptt_key and key.event_type == keyboard.KEY_UP):
         listening=False
+    elif (key.name == 'esc' and key.event_type == keyboard.KEY_UP):
+        app_running=False
 
 
 # Define a callback function to handle incoming audio
@@ -111,13 +94,11 @@ def process_output(q):
             # Wait for an output array to be added to the queue
             sample = q.get()
             if sample is None:
-                print("no sample received, stopping")
                 # If the output array is None, back to top
                 break
             if len(sample) == 0:
                 continue
             # Get the input features from the output array using the WhisperProcessor
-            #print(sample)
             #sd.play(sample, sr)
             input_features = processor(sample, sampling_rate=sr, return_tensors="pt").input_features
             predicted_ids = model.generate(input_features)
@@ -143,10 +124,9 @@ processing_thread.start()
 brain.init()
 print("Welcome to CodeBot!")
 
-with Listener(
-        on_press=on_press,
-        on_release=on_release) as listener:
-    listener.join()
+keyboard.hook(on_key_event, suppress=False)
+
+keyboard.wait('esc')
 
 # Wait for the processing thread to stop
 processing_thread.join()

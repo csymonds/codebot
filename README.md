@@ -46,7 +46,7 @@ It also uses the Whisper API to do speech to text
    Additional [PyTorch installers are found here.](https://pytorch.org/get-started/locally/)
 
    ```bash
-   $ pip3 install pynput torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu117
+   $ pip3 install keyboard torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu117
    ```
 
 6. Add keys
@@ -78,9 +78,4 @@ To check/modify what those defaults are, use
    python -m sounddevice
    ```
 
-PLEASE NOTE: Windows Defender will have an issue with the chat.py file because of the pynput library. It considers the use of this library to constitute a keylogger and will quarantine the file even before you run it. Therefore if you would like to run this file, once Windows Defender quarantines the file, you will need to 
-
-1. tell Windows Defender to allow the python file and
-2. Look in your Protection History, find the threat action, and tell it to restore the file
-
-Finally: You will get a warning about model parameters missing when you run this. It is harmless, and can be suppressed by setting the `ignore_warnings` parameter to `True`
+PLEASE NOTE: You will get a warning about model parameters missing when you run this. It is harmless, and can be suppressed by setting the `ignore_warnings` parameter to `True`
