@@ -1,17 +1,32 @@
 import sys
+import os
 import warnings
 import brain
 import utils
 import keyboard
+import openai
+import time
+from pydub import AudioSegment
+from scipy.io.wavfile import write
+import requests
 import sounddevice as sd
 import numpy as np
 from queue import Queue
 import threading
 from transformers import WhisperProcessor, WhisperForConditionalGeneration
+from enum import Enum, auto
+
+class Model(Enum):
+    hf = auto()
+    oai = auto()
+
+# define which model
+using_model = Model.oai
+openai.api_key = utils.open_file('key_openai.txt')
 
 # control state of app
 app_running = True
-ignore_warnings = False
+ignore_warnings = True
 
 # listening state
 listening=False
@@ -85,8 +100,8 @@ def audio_callback(indata, outdata, frames, time, status):
 # Define a processing function to process the output arrays from the queue
 def process_output(q):
     global listening, app_running, sr
-    processor = WhisperProcessor.from_pretrained("openai/whisper-base.en")
-    model = WhisperForConditionalGeneration.from_pretrained("openai/whisper-base.en")
+    processor = WhisperProcessor.from_pretrained("openai/whisper-tiny.en")
+    model = WhisperForConditionalGeneration.from_pretrained("openai/whisper-tiny.en")
     print("\nHold " + ptt_key + " key to talk to CodeBot")
     print("Press ESC any time to quit\n\nUSER: ")
     while app_running:
@@ -100,14 +115,29 @@ def process_output(q):
                 continue
             # Get the input features from the output array using the WhisperProcessor
             #sd.play(sample, sr)
-            input_features = processor(sample, sampling_rate=sr, return_tensors="pt").input_features
-            predicted_ids = model.generate(input_features)
-            transcription = processor.batch_decode(predicted_ids, skip_special_tokens=True)
-            # somehow gibberish or random noise cause it to output "you" or "You"
-            if str(transcription[0].strip().lower())  != "you":
-                print(str(transcription[0]))
-                brain.chat(str(transcription[0]))
-                print("\nUSER: ")
+            prompt = ""
+            if using_model == Model.hf:
+                input_features = processor(sample, sampling_rate=sr, return_tensors="pt").input_features
+                predicted_ids = model.generate(input_features)
+                transcription = processor.batch_decode(predicted_ids, skip_special_tokens=True)
+                # somehow gibberish or random noise cause it to output "you" or "You"
+                if str(transcription[0].strip().lower())  != "you":
+                    prompt = str(transcription[0])
+                    print(prompt)
+            elif using_model == Model.oai:
+                # Save the recorded audio to a .wav file
+                wav_file = "output.wav"
+                write(wav_file, sr, sample)
+                mp3_file = "output.mp3"
+                sound = AudioSegment.from_file(wav_file, format="wav")
+                sound.export(mp3_file, format="mp3")
+                audio_file= open(mp3_file, "rb")
+                transcript = openai.Audio.transcribe("whisper-1", audio_file)
+                prompt = transcript["text"]
+                print(prompt)
+            
+            brain.chat(prompt)
+            print("\nUSER: ")
 
 # suppress warning from transformers
 if ignore_warnings:

@@ -46,7 +46,7 @@ It also uses the Whisper API to do speech to text
    Additional [PyTorch installers are found here.](https://pytorch.org/get-started/locally/)
 
    ```bash
-   $ pip3 install keyboard torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu117
+   $ pip3 install keyboard scipy torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu117
    ```
 
 6. Add keys
