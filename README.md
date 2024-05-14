@@ -1,3 +1,6 @@
+# *** This repo has been retired, please see https://github.com/csymonds/chatbot ***
+
+
 This is a chatGPT bot with long term memory using Pinecone
 
 It also uses the Whisper API to do speech to text
