@@ -9,6 +9,7 @@ It also uses the Whisper API to do speech to text
     
 
     You will need to create an account on [Pinecone and follow their registration procedures](https://www.pinecone.io/).
+    The Ada embeddings uses a 1536-dimension vector
 
     Pinecone also has [documentation you can follow for integration with OpenAI](https://docs.pinecone.io/docs/openai) if you want to try your own.
 
@@ -26,10 +27,10 @@ It also uses the Whisper API to do speech to text
    $ cd codebot
    ```
 ## Virtual environment and dependency installation
-4. Virtualize (Note: Windows users will see `venv/Scripts/activate`)
+4. Virtualize (Note: Non-Windows users will see `venv/bin/activate`)
    ```
    $ python -m venv venv
-   $ . venv/bin/activate
+   $ . venv/Scripts/activate
    ```
 
 5. Install the library dependencies
